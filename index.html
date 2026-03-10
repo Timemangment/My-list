@@ -22,7 +22,7 @@
 </div>
 
 <div class="flex justify-between items-center mb-6">
-<h1 class="text-2xl font-bold">Task Manager Pro</h1>
+<h1 class="text-2xl font-bold">Task Manager GitHub</h1>
 <div class="flex gap-2">
 <button onclick="toggleView()" class="bg-blue-600 text-white px-3 py-2 rounded">Toggle View</button>
 <button onclick="toggleDark()" class="bg-slate-700 text-white px-3 py-2 rounded">Dark Mode</button>
@@ -41,23 +41,13 @@
 </select>
 </div>
 
-<!-- List view -->
 <div id="listView" class="space-y-3"></div>
 
-<!-- Board view -->
 <div id="boardView" class="grid md:grid-cols-4 gap-4 hidden">
-<div class="bg-white rounded shadow p-3 column" data-status="Incomplete">
-<h2 class="font-bold mb-2">Incomplete</h2>
-</div>
-<div class="bg-white rounded shadow p-3 column" data-status="In Progress">
-<h2 class="font-bold mb-2">In Progress</h2>
-</div>
-<div class="bg-white rounded shadow p-3 column" data-status="Needs Action">
-<h2 class="font-bold mb-2">Needs Action</h2>
-</div>
-<div class="bg-white rounded shadow p-3 column" data-status="Completed">
-<h2 class="font-bold mb-2">Completed</h2>
-</div>
+<div class="bg-white rounded shadow p-3 column" data-status="Incomplete"><h2 class="font-bold mb-2">Incomplete</h2></div>
+<div class="bg-white rounded shadow p-3 column" data-status="In Progress"><h2 class="font-bold mb-2">In Progress</h2></div>
+<div class="bg-white rounded shadow p-3 column" data-status="Needs Action"><h2 class="font-bold mb-2">Needs Action</h2></div>
+<div class="bg-white rounded shadow p-3 column" data-status="Completed"><h2 class="font-bold mb-2">Completed</h2></div>
 </div>
 </div>
 
@@ -83,20 +73,30 @@ async function fetchTasks(){
 }
 
 async function saveTasks(){
-    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
-        method: "PUT",
-        headers: {
-            "Authorization": `token ${TOKEN}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            message: "Update tasks",
-            content: btoa(JSON.stringify(tasks, null, 2)),
-            sha: sha
-        })
-    });
-    const data = await res.json();
-    sha = data.content.sha;
+    try {
+        const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
+            method: "PUT",
+            headers: {
+                "Authorization": `token ${TOKEN}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: "Update tasks",
+                content: btoa(JSON.stringify(tasks, null, 2)),
+                sha: sha
+            })
+        });
+        const data = await res.json();
+        if(data.content && data.content.sha){
+            sha = data.content.sha;  // update SHA for next save
+        } else {
+            console.error("GitHub save failed:", data);
+            alert("Error saving tasks. Check token or repo permissions.");
+        }
+    } catch(e){
+        console.error("Save error:", e);
+        alert("Error saving tasks to GitHub.");
+    }
 }
 
 // ===== UI =====
@@ -134,11 +134,11 @@ function createTaskCard(t){
     const selects = card.querySelectorAll("select");
 
     inputs[0].onchange = async e => { t.task=e.target.value; await saveTasks(); }
-    inputs[1].onchange = async e => { t.due=e.target.value; await saveTasks(); }
+    inputs[1].onchange = async e => { t.due=e.target.value; await saveTasks(); render(); }
     inputs[2].onchange = async e => { t.notes=e.target.value; await saveTasks(); }
 
     selects[0].onchange = async e => { t.status=e.target.value; await saveTasks(); render(); }
-    selects[1].onchange = async e => { t.priority=e.target.value; await saveTasks(); }
+    selects[1].onchange = async e => { t.priority=e.target.value; await saveTasks(); render(); }
 
     card.querySelector(".delete").onclick = async () => {
         tasks = tasks.filter(x => x.id != t.id);
@@ -150,6 +150,7 @@ function createTaskCard(t){
     return card;
 }
 
+// ===== RENDER WITH SORT =====
 async function render(){
     listView.innerHTML = "";
     document.querySelectorAll(".column").forEach(c => { c.innerHTML = `<h2 class="font-bold mb-2">${c.dataset.status}</h2>`; });
@@ -159,7 +160,16 @@ async function render(){
     tasks
       .filter(t => t.user === currentUser)
       .filter(t => t.task.toLowerCase().includes(s) && (filter.value==="All" || t.status===filter.value))
-      .forEach(t => {
+      .sort((a,b)=>{
+          const priorityOrder = {"High":1,"Medium":2,"Low":3};
+          if(priorityOrder[a.priority] !== priorityOrder[b.priority]){
+              return priorityOrder[a.priority] - priorityOrder[b.priority];
+          }
+          if(!a.due) return 1;
+          if(!b.due) return -1;
+          return new Date(a.due) - new Date(b.due);
+      })
+      .forEach(t=>{
           const card = createTaskCard(t);
           if(boardMode){
               const col = document.querySelector(`[data-status="${t.status}"]`);
@@ -171,14 +181,14 @@ async function render(){
 }
 
 // ===== CONTROLS =====
-function addTask(user=currentUser){
+async function addTask(user=currentUser){
+    if(!sha) await fetchTasks(); // ensure SHA available
     const newTask = {id:Date.now(), user, task:"New Task", status:"Incomplete", priority:"Low", due:"", notes:""};
     tasks.push(newTask);
-    render(); // show immediately
-    saveTasks(); // save in background
+    render();  // show immediately
+    await saveTasks(); // save to GitHub
 }
 
-// ===== Toggle views =====
 function toggleView(){
     boardMode = !boardMode;
     listView.classList.toggle("hidden");
@@ -225,7 +235,7 @@ filter.onchange = render;
 // ===== INITIAL LOAD =====
 async function init(){
     await fetchTasks();
-    switchUser(currentUser); // highlight active tab
+    switchUser(currentUser); // highlight tab and render
 }
 init();
 </script>
