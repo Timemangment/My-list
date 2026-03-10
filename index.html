@@ -88,7 +88,7 @@ async function saveTasks(){
         });
         const data = await res.json();
         if(data.content && data.content.sha){
-            sha = data.content.sha;  // update SHA for next save
+            sha = data.content.sha;
         } else {
             console.error("GitHub save failed:", data);
             alert("Error saving tasks. Check token or repo permissions.");
@@ -182,10 +182,18 @@ async function render(){
 
 // ===== CONTROLS =====
 async function addTask(user=currentUser){
-    if(!sha) await fetchTasks(); // ensure SHA available
-    const newTask = {id:Date.now(), user, task:"New Task", status:"Incomplete", priority:"Low", due:"", notes:""};
+    if(!sha) await fetchTasks(); // ensure SHA is ready
+    const newTask = {
+        id: Date.now(),
+        user,
+        task: "New Task",
+        status: "Incomplete",
+        priority: "Low",
+        due: "",
+        notes: ""
+    };
     tasks.push(newTask);
-    render();  // show immediately
+    render(); // show immediately
     await saveTasks(); // save to GitHub
 }
 
