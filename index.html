@@ -2,22 +2,31 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Task Manager GitHub Sync</title>
+<title>GitHub Multi-User Task Manager</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 .column{min-height:300px;}
 .task{cursor:grab;}
+.user-tab{transition: all 0.2s;}
+.user-tab.bg-blue-500{font-weight:bold;}
 </style>
 </head>
 <body class="bg-slate-100 min-h-screen p-6" id="body">
 <div class="max-w-7xl mx-auto">
+
+<!-- User Tabs -->
+<div class="flex gap-2 mb-4" id="userTabs">
+  <button onclick="switchUser('Owen')" class="user-tab bg-blue-500 text-white px-3 py-1 rounded">Owen</button>
+  <button onclick="switchUser('Lucy')" class="user-tab bg-gray-400 text-white px-3 py-1 rounded">Lucy</button>
+  <button onclick="switchUser('Nick')" class="user-tab bg-gray-400 text-white px-3 py-1 rounded">Nick</button>
+</div>
 
 <div class="flex justify-between items-center mb-6">
 <h1 class="text-2xl font-bold">Task Manager GitHub</h1>
 <div class="flex gap-2">
 <button onclick="toggleView()" class="bg-blue-600 text-white px-3 py-2 rounded">Toggle View</button>
 <button onclick="toggleDark()" class="bg-slate-700 text-white px-3 py-2 rounded">Dark Mode</button>
-<button onclick="addTask()" class="bg-green-600 text-white px-3 py-2 rounded">New Task</button>
+<button onclick="addTask(currentUser)" class="bg-green-600 text-white px-3 py-2 rounded">New Task</button>
 </div>
 </div>
 
@@ -32,8 +41,10 @@
 </select>
 </div>
 
+<!-- List view -->
 <div id="listView" class="space-y-3"></div>
 
+<!-- Board view -->
 <div id="boardView" class="grid md:grid-cols-4 gap-4 hidden">
 <div class="bg-white rounded shadow p-3 column" data-status="Incomplete">
 <h2 class="font-bold mb-2">Incomplete</h2>
@@ -52,14 +63,15 @@
 
 <script>
 // ===== CONFIG =====
-const OWNER = "Quizheadsboardgame"; // your GitHub username
-const REPO = "task-manager";        // your repository
-const FILE_PATH = "tasks.json";     // JSON file in repo
-const TOKEN = "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"; // your personal access token
+const OWNER = "Quizheadsboardgame";
+const REPO = "task-manager";
+const FILE_PATH = "tasks.json";
+const TOKEN = "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";
 
 let tasks = [];
 let boardMode = false;
 let sha = null;
+let currentUser = "Owen";
 
 // ===== GITHUB API =====
 async function fetchTasks(){
@@ -84,7 +96,7 @@ async function saveTasks(){
         })
     });
     const data = await res.json();
-    sha = data.content.sha; // update SHA for next save
+    sha = data.content.sha;
 }
 
 // ===== UI =====
@@ -121,22 +133,20 @@ function createTaskCard(t){
     const inputs = card.querySelectorAll("input");
     const selects = card.querySelectorAll("select");
 
-    inputs[0].onchange = async e => { t.task = e.target.value; await saveTasks(); await fetchTasks(); render(); }
-    inputs[1].onchange = async e => { t.due = e.target.value; await saveTasks(); await fetchTasks(); render(); }
-    inputs[2].onchange = async e => { t.notes = e.target.value; await saveTasks(); await fetchTasks(); render(); }
+    inputs[0].onchange = async e => { t.task=e.target.value; await saveTasks(); }
+    inputs[1].onchange = async e => { t.due=e.target.value; await saveTasks(); }
+    inputs[2].onchange = async e => { t.notes=e.target.value; await saveTasks(); }
 
-    selects[0].onchange = async e => { t.status = e.target.value; await saveTasks(); await fetchTasks(); render(); }
-    selects[1].onchange = async e => { t.priority = e.target.value; await saveTasks(); await fetchTasks(); render(); }
+    selects[0].onchange = async e => { t.status=e.target.value; await saveTasks(); render(); }
+    selects[1].onchange = async e => { t.priority=e.target.value; await saveTasks(); }
 
     card.querySelector(".delete").onclick = async () => {
         tasks = tasks.filter(x => x.id != t.id);
         await saveTasks();
-        await fetchTasks();
         render();
     }
 
     card.addEventListener("dragstart", e => e.dataTransfer.setData("id", t.id));
-
     return card;
 }
 
@@ -146,30 +156,29 @@ async function render(){
 
     const s = search.value.toLowerCase();
 
-    tasks.filter(t => {
-        const searchMatch = t.task.toLowerCase().includes(s);
-        const filterMatch = filter.value=="All" || t.status==filter.value;
-        return searchMatch && filterMatch;
-    }).forEach(t => {
-        const card = createTaskCard(t);
-        if(boardMode){
-            const col = document.querySelector(`[data-status="${t.status}"]`);
-            col.appendChild(card);
-        } else {
-            listView.appendChild(card);
-        }
-    });
+    tasks
+      .filter(t => t.user === currentUser)
+      .filter(t => t.task.toLowerCase().includes(s) && (filter.value==="All" || t.status===filter.value))
+      .forEach(t => {
+          const card = createTaskCard(t);
+          if(boardMode){
+              const col = document.querySelector(`[data-status="${t.status}"]`);
+              col.appendChild(card);
+          } else {
+              listView.appendChild(card);
+          }
+      });
 }
 
 // ===== CONTROLS =====
-async function addTask(){
-    const newTask = {id:Date.now(), task:"New Task", status:"Incomplete", priority:"Low", due:"", notes:""};
+function addTask(user=currentUser){
+    const newTask = {id:Date.now(), user, task:"New Task", status:"Incomplete", priority:"Low", due:"", notes:""};
     tasks.push(newTask);
-    await saveTasks();
-    await fetchTasks(); // ensure SHA and tasks updated
-    render();
+    render(); // show immediately
+    saveTasks(); // save in background
 }
 
+// ===== Toggle views =====
 function toggleView(){
     boardMode = !boardMode;
     listView.classList.toggle("hidden");
@@ -182,16 +191,30 @@ function toggleDark(){
     document.getElementById("body").classList.toggle("bg-slate-100");
 }
 
+// ===== User Tabs =====
+function switchUser(user){
+    currentUser = user;
+    document.querySelectorAll(".user-tab").forEach(btn=>{
+        if(btn.textContent === user){
+            btn.classList.add("bg-blue-500", "text-white");
+            btn.classList.remove("bg-gray-400");
+        } else {
+            btn.classList.remove("bg-blue-500", "text-white");
+            btn.classList.add("bg-gray-400");
+        }
+    });
+    render();
+}
+
 // ===== Drag & Drop Columns =====
 document.querySelectorAll(".column").forEach(col => {
     col.addEventListener("dragover", e => e.preventDefault());
-    col.addEventListener("drop", async e => {
+    col.addEventListener("drop", e => {
         const id = e.dataTransfer.getData("id");
-        const task = tasks.find(t => t.id == id);
+        const task = tasks.find(t => t.id==id);
         task.status = col.dataset.status;
-        await saveTasks();
-        await fetchTasks();
         render();
+        saveTasks();
     });
 });
 
@@ -202,10 +225,9 @@ filter.onchange = render;
 // ===== INITIAL LOAD =====
 async function init(){
     await fetchTasks();
-    render();
+    switchUser(currentUser); // highlight active tab
 }
 init();
-
 </script>
 </body>
 </html>
