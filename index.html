@@ -51,140 +51,161 @@
 </div>
 
 <script>
-// ========== CONFIG ==========
+// ===== CONFIG =====
 const OWNER = "Quizheadsboardgame"; // your GitHub username
-const REPO = "task-manager";        // repository name
-const FILE_PATH = "tasks.json";     // file name in repo
-const TOKEN = "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"; // your token
+const REPO = "task-manager";        // your repository
+const FILE_PATH = "tasks.json";     // JSON file in repo
+const TOKEN = "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"; // your personal access token
 
 let tasks = [];
 let boardMode = false;
 let sha = null;
 
-// ===== GITHUB API FUNCTIONS =====
-async function fetchTasks() {
-  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`);
-  const data = await res.json();
-  const content = atob(data.content);
-  sha = data.sha;
-  tasks = JSON.parse(content);
+// ===== GITHUB API =====
+async function fetchTasks(){
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`);
+    const data = await res.json();
+    const content = atob(data.content);
+    sha = data.sha;
+    tasks = JSON.parse(content);
 }
 
-async function saveTasks() {
-  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
-    method: "PUT",
-    headers: {
-      "Authorization": `token ${TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      message: "Update tasks",
-      content: btoa(JSON.stringify(tasks, null, 2)),
-      sha: sha
-    })
-  });
-  const data = await res.json();
-  sha = data.content.sha;
+async function saveTasks(){
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
+        method: "PUT",
+        headers: {
+            "Authorization": `token ${TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            message: "Update tasks",
+            content: btoa(JSON.stringify(tasks, null, 2)),
+            sha: sha
+        })
+    });
+    const data = await res.json();
+    sha = data.content.sha; // update SHA for next save
 }
 
-// ===== UI FUNCTIONS =====
-const listView=document.getElementById("listView")
-const boardView=document.getElementById("boardView")
-const search=document.getElementById("search")
-const filter=document.getElementById("filter")
+// ===== UI =====
+const listView = document.getElementById("listView");
+const boardView = document.getElementById("boardView");
+const search = document.getElementById("search");
+const filter = document.getElementById("filter");
 
 function createTaskCard(t){
-  let card=document.createElement("div")
-  card.className="task bg-white p-3 rounded shadow mb-2"
-  card.draggable=true
-  card.dataset.id=t.id
-  card.innerHTML=`
-  <input value="${t.task}" class="border rounded px-2 py-1 w-full mb-1">
-  <div class="grid grid-cols-3 gap-1 text-sm">
-    <select class="border rounded status">
-      <option ${t.status=="Incomplete"?"selected":""}>Incomplete</option>
-      <option ${t.status=="In Progress"?"selected":""}>In Progress</option>
-      <option ${t.status=="Needs Action"?"selected":""}>Needs Action</option>
-      <option ${t.status=="Completed"?"selected":""}>Completed</option>
-    </select>
-    <select class="border rounded priority">
-      <option ${t.priority=="Low"?"selected":""}>Low</option>
-      <option ${t.priority=="Medium"?"selected":""}>Medium</option>
-      <option ${t.priority=="High"?"selected":""}>High</option>
-    </select>
-    <input type="date" value="${t.due}" class="border rounded">
-  </div>
-  <input value="${t.notes}" placeholder="Notes..." class="border rounded px-2 py-1 mt-1 w-full">
-  <button class="bg-red-500 text-white px-2 py-1 mt-2 rounded delete">Delete</button>
-  `;
+    let card = document.createElement("div");
+    card.className = "task bg-white p-3 rounded shadow mb-2";
+    card.draggable = true;
+    card.dataset.id = t.id;
+    card.innerHTML = `
+        <input value="${t.task}" class="border rounded px-2 py-1 w-full mb-1">
+        <div class="grid grid-cols-3 gap-1 text-sm">
+            <select class="border rounded status">
+                <option ${t.status=="Incomplete"?"selected":""}>Incomplete</option>
+                <option ${t.status=="In Progress"?"selected":""}>In Progress</option>
+                <option ${t.status=="Needs Action"?"selected":""}>Needs Action</option>
+                <option ${t.status=="Completed"?"selected":""}>Completed</option>
+            </select>
+            <select class="border rounded priority">
+                <option ${t.priority=="Low"?"selected":""}>Low</option>
+                <option ${t.priority=="Medium"?"selected":""}>Medium</option>
+                <option ${t.priority=="High"?"selected":""}>High</option>
+            </select>
+            <input type="date" value="${t.due}" class="border rounded">
+        </div>
+        <input value="${t.notes}" placeholder="Notes..." class="border rounded px-2 py-1 mt-1 w-full">
+        <button class="bg-red-500 text-white px-2 py-1 mt-2 rounded delete">Delete</button>
+    `;
 
-  const inputs=card.querySelectorAll("input")
-  const selects=card.querySelectorAll("select")
+    const inputs = card.querySelectorAll("input");
+    const selects = card.querySelectorAll("select");
 
-  inputs[0].onchange=async e=>{t.task=e.target.value; await saveTasks()}
-  inputs[1].onchange=async e=>{t.due=e.target.value; await saveTasks()}
-  inputs[2].onchange=async e=>{t.notes=e.target.value; await saveTasks()}
+    inputs[0].onchange = async e => { t.task = e.target.value; await saveTasks(); await fetchTasks(); render(); }
+    inputs[1].onchange = async e => { t.due = e.target.value; await saveTasks(); await fetchTasks(); render(); }
+    inputs[2].onchange = async e => { t.notes = e.target.value; await saveTasks(); await fetchTasks(); render(); }
 
-  selects[0].onchange=async e=>{t.status=e.target.value; await saveTasks(); render()}
-  selects[1].onchange=async e=>{t.priority=e.target.value; await saveTasks()}
+    selects[0].onchange = async e => { t.status = e.target.value; await saveTasks(); await fetchTasks(); render(); }
+    selects[1].onchange = async e => { t.priority = e.target.value; await saveTasks(); await fetchTasks(); render(); }
 
-  card.querySelector(".delete").onclick=async ()=>{
-    tasks = tasks.filter(x=>x.id!=t.id)
-    await saveTasks()
-    render()
-  }
+    card.querySelector(".delete").onclick = async () => {
+        tasks = tasks.filter(x => x.id != t.id);
+        await saveTasks();
+        await fetchTasks();
+        render();
+    }
 
-  card.addEventListener("dragstart",e=>e.dataTransfer.setData("id",t.id))
+    card.addEventListener("dragstart", e => e.dataTransfer.setData("id", t.id));
 
-  return card
+    return card;
 }
 
 async function render(){
-  listView.innerHTML=""
-  document.querySelectorAll(".column").forEach(c=>{c.innerHTML=`<h2 class="font-bold mb-2">${c.dataset.status}</h2>`})
-  let s=search.value.toLowerCase()
-  tasks.filter(t=>{
-    let searchMatch=t.task.toLowerCase().includes(s)
-    let filterMatch=filter.value=="All" || t.status==filter.value
-    return searchMatch && filterMatch
-  }).forEach(t=>{
-    let card=createTaskCard(t)
-    if(boardMode){
-      let col=document.querySelector(`[data-status="${t.status}"]`)
-      col.appendChild(card)
-    } else listView.appendChild(card)
-  })
+    listView.innerHTML = "";
+    document.querySelectorAll(".column").forEach(c => { c.innerHTML = `<h2 class="font-bold mb-2">${c.dataset.status}</h2>`; });
+
+    const s = search.value.toLowerCase();
+
+    tasks.filter(t => {
+        const searchMatch = t.task.toLowerCase().includes(s);
+        const filterMatch = filter.value=="All" || t.status==filter.value;
+        return searchMatch && filterMatch;
+    }).forEach(t => {
+        const card = createTaskCard(t);
+        if(boardMode){
+            const col = document.querySelector(`[data-status="${t.status}"]`);
+            col.appendChild(card);
+        } else {
+            listView.appendChild(card);
+        }
+    });
 }
 
 // ===== CONTROLS =====
 async function addTask(){
-  tasks.push({id:Date.now(),task:"New Task",status:"Incomplete",priority:"Low",due:"",notes:""})
-  await saveTasks()
-  render()
+    const newTask = {id:Date.now(), task:"New Task", status:"Incomplete", priority:"Low", due:"", notes:""};
+    tasks.push(newTask);
+    await saveTasks();
+    await fetchTasks(); // ensure SHA and tasks updated
+    render();
 }
 
-function toggleView(){boardMode=!boardMode; listView.classList.toggle("hidden"); boardView.classList.toggle("hidden"); render()}
-function toggleDark(){document.getElementById("body").classList.toggle("bg-slate-900"); document.getElementById("body").classList.toggle("bg-slate-100")}
+function toggleView(){
+    boardMode = !boardMode;
+    listView.classList.toggle("hidden");
+    boardView.classList.toggle("hidden");
+    render();
+}
+
+function toggleDark(){
+    document.getElementById("body").classList.toggle("bg-slate-900");
+    document.getElementById("body").classList.toggle("bg-slate-100");
+}
 
 // ===== Drag & Drop Columns =====
-document.querySelectorAll(".column").forEach(col=>{
-  col.addEventListener("dragover",e=>e.preventDefault())
-  col.addEventListener("drop", async e=>{
-    let id=e.dataTransfer.getData("id")
-    let task=tasks.find(t=>t.id==id)
-    task.status=col.dataset.status
-    await saveTasks()
-    render()
-  })
-})
+document.querySelectorAll(".column").forEach(col => {
+    col.addEventListener("dragover", e => e.preventDefault());
+    col.addEventListener("drop", async e => {
+        const id = e.dataTransfer.getData("id");
+        const task = tasks.find(t => t.id == id);
+        task.status = col.dataset.status;
+        await saveTasks();
+        await fetchTasks();
+        render();
+    });
+});
 
 // ===== Search / Filter =====
-search.oninput=render
-filter.onchange=render
+search.oninput = render;
+filter.onchange = render;
 
 // ===== INITIAL LOAD =====
-async function init(){ await fetchTasks(); render() }
-init()
+async function init(){
+    await fetchTasks();
+    render();
+}
+init();
+
 </script>
 </body>
 </html>
